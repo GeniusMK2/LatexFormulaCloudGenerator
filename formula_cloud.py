@@ -136,7 +136,7 @@ class FormulaCloudGenerator:
         """Normalize user-provided LaTeX text.
 
         - Strip optional surrounding `$...$` wrappers.
-        - Collapse accidental over-escaped slashes (`\\\...` -> `\\`).
+        - Collapse accidental over-escaped slashes (`\\\\\\...` -> `\\\\`).
         """
         normalized = latex.strip()
         if normalized.startswith("$") and normalized.endswith("$") and len(normalized) >= 2:
@@ -145,16 +145,8 @@ class FormulaCloudGenerator:
         # accidental over-escaping from JSON strings.
         normalized = re.sub(r"\\{3,}", r"\\\\", normalized)
 
-        matrix_wrappers = {
-            "matrix": ("", ""),
-            "bmatrix": (r"\left[", r"\right]"),
-            "pmatrix": (r"\left(", r"\right)"),
-            "Bmatrix": (r"\left\{", r"\right\}"),
-            "vmatrix": (r"\left|", r"\right|"),
-            "Vmatrix": (r"\left\|", r"\right\|"),
-            "cases": (r"\left\{", r"\right."),
-        }
-        for env, (left_wrap, right_wrap) in matrix_wrappers.items():
+        matrix_envs = ("matrix", "bmatrix", "pmatrix", "Bmatrix", "vmatrix", "Vmatrix", "cases")
+        for env in matrix_envs:
             pattern = re.compile(rf"\\begin\{{{env}\}}(.*?)\\end\{{{env}\}}", re.DOTALL)
 
             def _replace_env(match: re.Match[str]) -> str:
@@ -167,10 +159,31 @@ class FormulaCloudGenerator:
                 body = body.strip()
                 if body.endswith(r"\\"):
                     body = body[: -len(r"\\")].rstrip()
-                matrix_core = rf"\matrix{{{body}}}"
-                return f"{left_wrap}{matrix_core}{right_wrap}" if left_wrap or right_wrap else matrix_core
+                return rf"\begin{{{env}}}{body}\end{{{env}}}"
 
             normalized = pattern.sub(_replace_env, normalized)
+
+        # Convert legacy wrappers with primitive matrix syntax to standard matrix
+        # environments accepted by matplotlib mathtext.
+        primitive_wrappers = {
+            ("[", "]"): "bmatrix",
+            ("(", ")"): "pmatrix",
+            (r"\{", r"\}"): "Bmatrix",
+            ("|", "|"): "vmatrix",
+            (r"\|", r"\|"): "Vmatrix",
+        }
+        for (left_delim, right_delim), env in primitive_wrappers.items():
+            pattern = re.compile(
+                rf"\\left{re.escape(left_delim)}\\matrix\{{(.*?)\}}\\right{re.escape(right_delim)}",
+                re.DOTALL,
+            )
+
+            def _replace_primitive(match: re.Match[str]) -> str:
+                body = match.group(1).strip()
+                body = re.sub(r"(?<!\\)\\(?![A-Za-z\\])", r"\\\\", body)
+                return rf"\begin{{{env}}}{body}\end{{{env}}}"
+
+            normalized = pattern.sub(_replace_primitive, normalized)
 
         normalized = re.sub(
             r"\\system\{([^}]*)\}",

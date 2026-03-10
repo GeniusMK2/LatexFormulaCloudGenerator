@@ -15,6 +15,7 @@ from typing import Iterable
 import matplotlib.pyplot as plt
 import numpy as np
 from PIL import Image
+from matplotlib.transforms import Bbox
 
 
 @dataclass
@@ -83,9 +84,24 @@ class FormulaCloudGenerator:
         color: str = "black",
     ) -> Image.Image:
         """Render one LaTeX formula into a cropped RGBA image."""
-        fig = plt.figure(figsize=(0.1, 0.1), dpi=dpi)
+        fig_width = max(2.0, fontsize / 10)
+        fig_height = max(1.6, fontsize / 12)
+        fig = plt.figure(figsize=(fig_width, fig_height), dpi=dpi)
         fig.patch.set_alpha(0)
-        text = fig.text(0, 0, f"${latex}$", fontsize=fontsize, color=color)
+        text = fig.text(
+            0.5,
+            0.5,
+            f"${latex}$",
+            fontsize=fontsize,
+            color=color,
+            ha="center",
+            va="center",
+        )
+        fig.canvas.draw()
+
+        renderer = fig.canvas.get_renderer()
+        bbox_pixels = text.get_window_extent(renderer=renderer).expanded(1.18, 1.3)
+        bbox_inches = Bbox.from_extents(*(bbox_pixels / dpi))
 
         output = io.BytesIO()
         fig.savefig(
@@ -93,15 +109,15 @@ class FormulaCloudGenerator:
             format="png",
             dpi=dpi,
             transparent=True,
-            bbox_inches="tight",
-            bbox_extra_artists=(text,),
-            pad_inches=0.08,
+            bbox_inches=bbox_inches,
+            pad_inches=0,
         )
         plt.close(fig)
         output.seek(0)
 
         pil = Image.open(output).convert("RGBA")
-        return FormulaCloudGenerator.trim_transparent_margin(pil, padding=2)
+        edge_padding = max(4, fontsize // 10)
+        return FormulaCloudGenerator.trim_transparent_margin(pil, padding=edge_padding)
 
     @staticmethod
     def trim_transparent_margin(image: Image.Image, padding: int = 0) -> Image.Image:

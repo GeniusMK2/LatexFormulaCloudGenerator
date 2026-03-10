@@ -7,6 +7,9 @@
 - 支持输入 `image` 字段（直接使用已有公式图片）
 - 支持 `weight` 权重，权重越大显示越大
 - 螺旋搜索排版，尽量避免重叠
+- 支持随机旋转角度（横向/纵向/斜向）
+- 支持每个公式重复出现（`repeat`）
+- 支持云形状约束（`rectangle`/`square`/`circle`/`diamond`）
 
 ## 安装依赖
 ```bash
@@ -19,7 +22,7 @@ pip install matplotlib pillow numpy
 示例：
 ```json
 [
-  {"latex": "E=mc^2", "weight": 10, "fontsize": 48},
+  {"latex": "E=mc^2", "weight": 10, "fontsize": 48, "repeat": 2},
   {"latex": "\\int_a^b f(x)dx", "weight": 8},
   {"image": "./formula1.png", "weight": 6}
 ]
@@ -31,11 +34,17 @@ pip install matplotlib pillow numpy
 - `weight`: 大小权重（浮点或整数）
 - `fontsize`: 仅对 `latex` 生效，可选
 - `color`: 仅对 `latex` 生效，可选
+- `repeat`: 同一公式重复次数，可选，默认 1
 
 ## 运行
 ```bash
-python formula_cloud.py --input sample_formulas.json --output formula_cloud.png --width 1920 --height 1080
+python formula_cloud.py --input sample_formulas.json --output formula_cloud.png --width 1920 --height 1080 --shape circle --angles 0,45,90,135
 ```
 
 ## 输出
 输出一张 PNG 图片（默认 `formula_cloud.png`）。
+
+
+参数补充：
+- `--shape`: 云形状，可选 `rectangle`、`square`、`circle`、`diamond`
+- `--angles`: 允许的旋转角度（度数，逗号分隔），如 `0,90` 表示仅横竖排

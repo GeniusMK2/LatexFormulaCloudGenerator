@@ -23,6 +23,7 @@ class FormulaItem:
     image: Image.Image
     weight: float
     label: str
+    repeat: int = 1
 
 
 @dataclass
@@ -39,11 +40,38 @@ class FormulaCloudGenerator:
         height: int = 1080,
         background: tuple[int, int, int, int] = (255, 255, 255, 255),
         random_seed: int | None = 42,
+        allowed_angles: tuple[int, ...] = (0, 45, 90, 135, 180, 225, 270, 315),
+        shape: str = "rectangle",
     ) -> None:
         self.width = width
         self.height = height
         self.background = background
         self.rng = random.Random(random_seed)
+        self.allowed_angles = allowed_angles
+        self.shape = shape
+        self.shape_mask = self._build_shape_mask(shape)
+
+    def _build_shape_mask(self, shape: str) -> np.ndarray:
+        yy, xx = np.indices((self.height, self.width))
+        cx = (self.width - 1) / 2
+        cy = (self.height - 1) / 2
+
+        if shape == "rectangle":
+            return np.ones((self.height, self.width), dtype=bool)
+
+        if shape == "square":
+            half_side = min(self.width, self.height) / 2
+            return (np.abs(xx - cx) <= half_side) & (np.abs(yy - cy) <= half_side)
+
+        if shape == "circle":
+            radius = min(self.width, self.height) / 2
+            return ((xx - cx) ** 2 + (yy - cy) ** 2) <= radius**2
+
+        if shape == "diamond":
+            radius = min(self.width, self.height) / 2
+            return (np.abs(xx - cx) + np.abs(yy - cy)) <= radius
+
+        raise ValueError(f"Unsupported shape: {shape}")
 
     @staticmethod
     def render_latex_to_image(
@@ -97,7 +125,20 @@ class FormulaCloudGenerator:
         if x < 0 or y < 0 or x + w > self.width or y + h > self.height:
             return True
         occupied = mask[y : y + h, x : x + w]
-        return np.any((alpha > 0) & occupied)
+        available = self.shape_mask[y : y + h, x : x + w]
+        pixels = alpha > 0
+        if np.any(pixels & ~available):
+            return True
+        return np.any(pixels & occupied)
+
+    def _transform_formula(self, image: Image.Image, target_size: int) -> Image.Image:
+        scaled = self.scale_image(image, target_size)
+        angle = self.rng.choice(self.allowed_angles)
+        if angle == 0:
+            return scaled
+        return self.trim_transparent_margin(
+            scaled.rotate(angle, expand=True, resample=Image.Resampling.BICUBIC)
+        )
 
     def _place_one(self, mask: np.ndarray, image: Image.Image) -> PlacedFormula | None:
         alpha = np.array(image.split()[-1]) > 0
@@ -119,7 +160,11 @@ class FormulaCloudGenerator:
         return None
 
     def generate(self, items: Iterable[FormulaItem]) -> Image.Image:
-        items_list = sorted(items, key=lambda t: t.weight, reverse=True)
+        expanded_items: list[FormulaItem] = []
+        for item in items:
+            expanded_items.extend([item] * max(1, item.repeat))
+
+        items_list = sorted(expanded_items, key=lambda t: t.weight, reverse=True)
         if not items_list:
             raise ValueError("No formulas/images provided.")
 
@@ -136,8 +181,8 @@ class FormulaCloudGenerator:
         for item in items_list:
             normalized = (item.weight - min_weight) / weight_span
             target_size = int(min_size + normalized * (max_size - min_size))
-            scaled = self.scale_image(item.image, target_size)
-            position = self._place_one(mask, scaled)
+            transformed = self._transform_formula(item.image, target_size)
+            position = self._place_one(mask, transformed)
             if position:
                 canvas.alpha_composite(position.image, (position.x, position.y))
                 placed += 1
@@ -153,17 +198,18 @@ def load_items_from_json(json_path: Path) -> list[FormulaItem]:
 
     for item in data:
         weight = float(item.get("weight", 1.0))
+        repeat = max(1, int(item.get("repeat", 1)))
         if "latex" in item:
             img = FormulaCloudGenerator.render_latex_to_image(
                 item["latex"],
                 fontsize=int(item.get("fontsize", 40)),
                 color=item.get("color", "black"),
             )
-            items.append(FormulaItem(img, weight, item["latex"]))
+            items.append(FormulaItem(img, weight, item["latex"], repeat=repeat))
         elif "image" in item:
             path = Path(item["image"])
             img = FormulaCloudGenerator.load_formula_image(path)
-            items.append(FormulaItem(img, weight, str(path)))
+            items.append(FormulaItem(img, weight, str(path), repeat=repeat))
         else:
             raise ValueError("Each item must contain either 'latex' or 'image'.")
 
@@ -177,6 +223,19 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--width", type=int, default=1920)
     parser.add_argument("--height", type=int, default=1080)
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument(
+        "--shape",
+        type=str,
+        choices=["rectangle", "square", "circle", "diamond"],
+        default="rectangle",
+        help="Cloud silhouette shape",
+    )
+    parser.add_argument(
+        "--angles",
+        type=str,
+        default="0,45,90,135,180,225,270,315",
+        help="Allowed rotation angles in degrees, comma-separated",
+    )
     return parser.parse_args()
 
 
@@ -184,7 +243,17 @@ def main() -> None:
     args = parse_args()
     items = load_items_from_json(args.input)
 
-    generator = FormulaCloudGenerator(width=args.width, height=args.height, random_seed=args.seed)
+    angle_values = tuple(int(x.strip()) % 360 for x in args.angles.split(",") if x.strip())
+    if not angle_values:
+        raise ValueError("--angles must include at least one integer angle")
+
+    generator = FormulaCloudGenerator(
+        width=args.width,
+        height=args.height,
+        random_seed=args.seed,
+        allowed_angles=angle_values,
+        shape=args.shape,
+    )
     result = generator.generate(items)
     result.save(args.output)
     print(f"Saved formula cloud: {args.output}")

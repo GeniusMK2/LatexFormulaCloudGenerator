@@ -30,10 +30,12 @@ pip install matplotlib pillow numpy
 ```
 
 字段说明：
-- `latex`: LaTeX 字符串（不需要手动加 `$...$`）
+> 提示：程序会自动纠正常见的多余转义（例如 `\\int` 会按 `\int` 渲染）。
+
+- `latex`: LaTeX 字符串（不需要手动加 `$...$`，程序会自动去掉首尾 `$`）
 - `image`: 公式图片路径（建议透明背景）
 - `weight`: 大小权重（浮点或整数）
-- `fontsize`: 仅对 `latex` 生效，可选
+- `fontsize`: 仅对 `latex` 生效，可选（为保证可读性，最小会按 32 处理）
 - `color`: 仅对 `latex` 生效，可选
 - `repeat`: 同一公式重复次数，可选，默认 1
 

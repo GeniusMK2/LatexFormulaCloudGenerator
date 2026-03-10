@@ -8,6 +8,7 @@ import io
 import json
 import math
 import random
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
@@ -37,6 +38,8 @@ class PlacedFormula:
 
 
 class FormulaCloudGenerator:
+    MIN_LATEX_FONT_SIZE = 32
+
     def __init__(
         self,
         width: int = 1920,
@@ -84,6 +87,8 @@ class FormulaCloudGenerator:
         color: str = "black",
     ) -> Image.Image:
         """Render one LaTeX formula into a cropped RGBA image."""
+        latex = FormulaCloudGenerator.normalize_latex_input(latex)
+        fontsize = max(FormulaCloudGenerator.MIN_LATEX_FONT_SIZE, fontsize)
         fig_width = max(2.0, fontsize / 10)
         fig_height = max(1.6, fontsize / 12)
         fig = plt.figure(figsize=(fig_width, fig_height), dpi=dpi)
@@ -118,6 +123,18 @@ class FormulaCloudGenerator:
         pil = Image.open(output).convert("RGBA")
         edge_padding = max(4, fontsize // 10)
         return FormulaCloudGenerator.trim_transparent_margin(pil, padding=edge_padding)
+
+    @staticmethod
+    def normalize_latex_input(latex: str) -> str:
+        """Normalize user-provided LaTeX text.
+
+        - Strip optional surrounding `$...$` wrappers.
+        - Collapse accidental repeated escape slashes (`\\\\` -> `\\`).
+        """
+        normalized = latex.strip()
+        if normalized.startswith("$") and normalized.endswith("$") and len(normalized) >= 2:
+            normalized = normalized[1:-1].strip()
+        return re.sub(r"\\\\+", r"\\", normalized)
 
     @staticmethod
     def trim_transparent_margin(image: Image.Image, padding: int = 0) -> Image.Image:
@@ -229,7 +246,7 @@ class FormulaCloudGenerator:
         items_list = sorted(expanded_items, key=lambda t: t.weight, reverse=True)
 
         max_size = min(self.width, self.height) // 3
-        min_size = max(40, max_size // 6)
+        min_size = max(90, max_size // 4)
 
         mask = np.zeros((self.height, self.width), dtype=bool)
         canvas = Image.new("RGBA", (self.width, self.height), self.background)

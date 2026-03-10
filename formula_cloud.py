@@ -135,26 +135,33 @@ class FormulaCloudGenerator:
         """Normalize user-provided LaTeX text.
 
         - Strip optional surrounding `$...$` wrappers.
-        - Collapse accidental repeated escape slashes (`\\\\` -> `\\`).
+        - Collapse accidental over-escaped slashes (`\\\...` -> `\\`).
         """
         normalized = latex.strip()
         if normalized.startswith("$") and normalized.endswith("$") and len(normalized) >= 2:
             normalized = normalized[1:-1].strip()
-        normalized = re.sub(r"\\\\+", r"\\", normalized)
+        # Keep canonical LaTeX line breaks ("\\") intact while reducing
+        # accidental over-escaping from JSON strings.
+        normalized = re.sub(r"\\{3,}", r"\\\\", normalized)
 
         env_to_wrappers = {
-            "bmatrix": (r"\\left[", r"\\right]"),
-            "pmatrix": (r"\\left(", r"\\right)"),
-            "Bmatrix": (r"\\left\\{", r"\\right\\}"),
-            "vmatrix": (r"\\left|", r"\\right|"),
-            "Vmatrix": (r"\\left\\|", r"\\right\\|"),
+            "bmatrix": (r"\left[", r"\right]"),
+            "pmatrix": (r"\left(", r"\right)"),
+            "Bmatrix": (r"\left\{", r"\right\}"),
+            "vmatrix": (r"\left|", r"\right|"),
+            "Vmatrix": (r"\left\|", r"\right\|"),
         }
         for env, (left_wrap, right_wrap) in env_to_wrappers.items():
-            pattern = re.compile(rf"\\\\begin\{{{env}\}}(.*?)\\\\end\{{{env}\}}", re.DOTALL)
-            normalized = pattern.sub(
-                lambda m: f"{left_wrap}\\begin{{matrix}}{m.group(1)}\\end{{matrix}}{right_wrap}",
-                normalized,
-            )
+            pattern = re.compile(rf"\\begin\{{{env}\}}(.*?)\\end\{{{env}\}}", re.DOTALL)
+
+            def _replace_env(match: re.Match[str]) -> str:
+                body = match.group(1)
+                # Accept a common typo where matrix rows are separated by a
+                # single backslash ("\\ ") instead of canonical "\\\\".
+                body = re.sub(r"(?<!\\)\\(?![A-Za-z\\])", r"\\\\", body)
+                return f"{left_wrap}\\begin{{matrix}}{body}\\end{{matrix}}{right_wrap}"
+
+            normalized = pattern.sub(_replace_env, normalized)
 
         normalized = re.sub(
             r"\\system\{([^}]*)\}",

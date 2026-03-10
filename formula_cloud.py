@@ -77,6 +77,12 @@ class FormulaCloudGenerator:
             radius = min(self.width, self.height) / 2
             return (np.abs(xx - cx) + np.abs(yy - cy)) <= radius
 
+        if shape == "heart":
+            margin = 0.88
+            nx = ((xx - cx) / (self.width / 2)) / margin
+            ny = ((cy - yy) / (self.height / 2)) / margin
+            return ((nx**2 + ny**2 - 1) ** 3 - nx**2 * ny**3) <= 0
+
         raise ValueError(f"Unsupported shape: {shape}")
 
     @staticmethod
@@ -134,7 +140,28 @@ class FormulaCloudGenerator:
         normalized = latex.strip()
         if normalized.startswith("$") and normalized.endswith("$") and len(normalized) >= 2:
             normalized = normalized[1:-1].strip()
-        return re.sub(r"\\\\+", r"\\", normalized)
+        normalized = re.sub(r"\\\\+", r"\\", normalized)
+
+        env_to_wrappers = {
+            "bmatrix": (r"\\left[", r"\\right]"),
+            "pmatrix": (r"\\left(", r"\\right)"),
+            "Bmatrix": (r"\\left\\{", r"\\right\\}"),
+            "vmatrix": (r"\\left|", r"\\right|"),
+            "Vmatrix": (r"\\left\\|", r"\\right\\|"),
+        }
+        for env, (left_wrap, right_wrap) in env_to_wrappers.items():
+            pattern = re.compile(rf"\\\\begin\{{{env}\}}(.*?)\\\\end\{{{env}\}}", re.DOTALL)
+            normalized = pattern.sub(
+                lambda m: f"{left_wrap}\\begin{{matrix}}{m.group(1)}\\end{{matrix}}{right_wrap}",
+                normalized,
+            )
+
+        normalized = re.sub(
+            r"\\system\{([^}]*)\}",
+            lambda m: "\\begin{cases}" + m.group(1).replace(";", r"\\") + "\\end{cases}",
+            normalized,
+        )
+        return normalized
 
     @staticmethod
     def trim_transparent_margin(image: Image.Image, padding: int = 0) -> Image.Image:
@@ -303,7 +330,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--shape",
         type=str,
-        choices=["rectangle", "square", "circle", "diamond"],
+        choices=["rectangle", "square", "circle", "diamond", "heart"],
         default="rectangle",
         help="Cloud silhouette shape",
     )

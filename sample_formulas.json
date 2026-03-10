@@ -15,12 +15,20 @@
     "repeat": 3
   },
   {
-    "latex": "\\nabla \\cdot \\vec{E} = \\frac{\\rho}{\\varepsilon_0}",
-    "weight": 7
+    "latex": "\\begin{bmatrix}1 & 2 \\\\ 3 & 4\\end{bmatrix}",
+    "weight": 9
   },
   {
-    "latex": "\\frac{d}{dx}\\sin x = \\cos x",
-    "weight": 6
+    "latex": "\\begin{vmatrix}a & b \\\\ c & d\\end{vmatrix}",
+    "weight": 8
+  },
+  {
+    "latex": "\\begin{cases}x+y=1\\\\x-y=2\\end{cases}",
+    "weight": 8
+  },
+  {
+    "latex": "\\system{2x+y=5; x-y=1}",
+    "weight": 7
   },
   {
     "latex": "e^{i\\pi}+1=0",

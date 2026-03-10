@@ -101,7 +101,7 @@ class FormulaCloudGenerator:
 
         renderer = fig.canvas.get_renderer()
         bbox_pixels = text.get_window_extent(renderer=renderer).expanded(1.18, 1.3)
-        bbox_inches = Bbox.from_extents(*(bbox_pixels / dpi))
+        bbox_inches = Bbox.from_extents(*(bbox_pixels.extents / dpi))
 
         output = io.BytesIO()
         fig.savefig(

@@ -1,0 +1,9 @@
+[
+  {"latex": "E=mc^2", "weight": 10, "fontsize": 48},
+  {"latex": "\\int_a^b f(x)dx", "weight": 8},
+  {"latex": "\\sum_{i=1}^n i = \\frac{n(n+1)}{2}", "weight": 9},
+  {"latex": "\\nabla \\cdot \\vec{E} = \\frac{\\rho}{\\varepsilon_0}", "weight": 7},
+  {"latex": "\\frac{d}{dx}\\sin x = \\cos x", "weight": 6},
+  {"latex": "e^{i\\pi}+1=0", "weight": 10},
+  {"latex": "\\lim_{n\\to\\infty}(1+\\frac{1}{n})^n=e", "weight": 7}
+]

@@ -145,6 +145,7 @@ class FormulaCloudGenerator:
         normalized = re.sub(r"\\{3,}", r"\\\\", normalized)
 
         env_to_wrappers = {
+            "matrix": ("", ""),
             "bmatrix": (r"\left[", r"\right]"),
             "pmatrix": (r"\left(", r"\right)"),
             "Bmatrix": (r"\left\{", r"\right\}"),
@@ -159,7 +160,14 @@ class FormulaCloudGenerator:
                 # Accept a common typo where matrix rows are separated by a
                 # single backslash ("\\ ") instead of canonical "\\\\".
                 body = re.sub(r"(?<!\\)\\(?![A-Za-z\\])", r"\\\\", body)
-                return f"{left_wrap}\\begin{{matrix}}{body}\\end{{matrix}}{right_wrap}"
+                # Matplotlib's mathtext parser does not support amsmath
+                # environments like \begin{matrix}...\end{matrix}. Convert to
+                # TeX primitive \matrix{...} with \cr row separators.
+                body = re.sub(r"\\\\\s*", r"\\cr ", body)
+                body = body.strip()
+                if body.endswith(r"\cr"):
+                    body = body[: -len(r"\cr")].rstrip()
+                return f"{left_wrap}\\matrix{{{body}}}{right_wrap}"
 
             normalized = pattern.sub(_replace_env, normalized)
 

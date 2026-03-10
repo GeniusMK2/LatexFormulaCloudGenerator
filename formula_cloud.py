@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import io
 import json
 import math
 import random
@@ -81,30 +82,39 @@ class FormulaCloudGenerator:
         color: str = "black",
     ) -> Image.Image:
         """Render one LaTeX formula into a cropped RGBA image."""
-        fig = plt.figure(figsize=(0.01, 0.01), dpi=dpi)
+        fig = plt.figure(figsize=(0.1, 0.1), dpi=dpi)
+        fig.patch.set_alpha(0)
         text = fig.text(0, 0, f"${latex}$", fontsize=fontsize, color=color)
-        fig.canvas.draw()
 
-        bbox = text.get_window_extent()
-        width_px, height_px = bbox.width, bbox.height
-
-        fig.set_size_inches((width_px + 20) / dpi, (height_px + 20) / dpi)
-        text.set_position((10 / dpi, 10 / dpi))
-
-        fig.canvas.draw()
-        rgba = np.asarray(fig.canvas.buffer_rgba())
+        output = io.BytesIO()
+        fig.savefig(
+            output,
+            format="png",
+            dpi=dpi,
+            transparent=True,
+            bbox_inches="tight",
+            bbox_extra_artists=(text,),
+            pad_inches=0.08,
+        )
         plt.close(fig)
+        output.seek(0)
 
-        pil = Image.fromarray(rgba).convert("RGBA")
-        return FormulaCloudGenerator.trim_transparent_margin(pil)
+        pil = Image.open(output).convert("RGBA")
+        return FormulaCloudGenerator.trim_transparent_margin(pil, padding=2)
 
     @staticmethod
-    def trim_transparent_margin(image: Image.Image) -> Image.Image:
+    def trim_transparent_margin(image: Image.Image, padding: int = 0) -> Image.Image:
         alpha = image.split()[-1]
         bbox = alpha.getbbox()
         if bbox is None:
             return image
-        return image.crop(bbox)
+        left, top, right, bottom = bbox
+        if padding > 0:
+            left = max(0, left - padding)
+            top = max(0, top - padding)
+            right = min(image.width, right + padding)
+            bottom = min(image.height, bottom + padding)
+        return image.crop((left, top, right, bottom))
 
     @staticmethod
     def load_formula_image(path: Path) -> Image.Image:
@@ -160,19 +170,27 @@ class FormulaCloudGenerator:
         return None
 
     def generate(self, items: Iterable[FormulaItem]) -> Image.Image:
+        base_items = list(items)
+        if not base_items:
+            raise ValueError("No formulas/images provided.")
+
+        max_weight = max(item.weight for item in base_items)
+        min_weight = min(item.weight for item in base_items)
+        weight_span = max(max_weight - min_weight, 1e-6)
+
         expanded_items: list[FormulaItem] = []
-        for item in items:
-            expanded_items.extend([item] * max(1, item.repeat))
+        max_inverse_repeat = 6
+        for item in base_items:
+            # Higher weight -> fewer copies. Lower weight -> more copies.
+            inverse_normalized = (max_weight - item.weight) / weight_span
+            inverse_multiplier = 1 + inverse_normalized * (max_inverse_repeat - 1)
+            effective_repeat = max(1, int(round(item.repeat * inverse_multiplier)))
+            expanded_items.extend([item] * effective_repeat)
 
         items_list = sorted(expanded_items, key=lambda t: t.weight, reverse=True)
-        if not items_list:
-            raise ValueError("No formulas/images provided.")
 
         max_size = min(self.width, self.height) // 3
         min_size = max(40, max_size // 6)
-        max_weight = max(item.weight for item in items_list)
-        min_weight = min(item.weight for item in items_list)
-        weight_span = max(max_weight - min_weight, 1e-6)
 
         mask = np.zeros((self.height, self.width), dtype=bool)
         canvas = Image.new("RGBA", (self.width, self.height), self.background)

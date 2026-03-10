@@ -32,6 +32,7 @@ class PlacedFormula:
     image: Image.Image
     x: int
     y: int
+    center: tuple[float, float]
 
 
 class FormulaCloudGenerator:
@@ -150,11 +151,28 @@ class FormulaCloudGenerator:
             scaled.rotate(angle, expand=True, resample=Image.Resampling.BICUBIC)
         )
 
-    def _place_one(self, mask: np.ndarray, image: Image.Image) -> PlacedFormula | None:
+    def _is_far_enough_from_same_label(
+        self,
+        center: tuple[float, float],
+        same_label_centers: list[tuple[float, float]],
+        min_distance: float,
+    ) -> bool:
+        return all(
+            math.hypot(center[0] - old_center[0], center[1] - old_center[1]) >= min_distance
+            for old_center in same_label_centers
+        )
+
+    def _place_one(
+        self,
+        mask: np.ndarray,
+        image: Image.Image,
+        same_label_centers: list[tuple[float, float]],
+    ) -> PlacedFormula | None:
         alpha = np.array(image.split()[-1]) > 0
         h, w = alpha.shape
 
         center_x, center_y = self.width // 2, self.height // 2
+        min_distance = max(w, h) * 1.5
 
         max_radius = int(math.hypot(self.width, self.height))
         angle = self.rng.random() * 2 * math.pi
@@ -162,10 +180,15 @@ class FormulaCloudGenerator:
             for _ in range(8):
                 x = int(center_x + radius * math.cos(angle) - w / 2)
                 y = int(center_y + radius * math.sin(angle) - h / 2)
-                if not self._collides(mask, x, y, alpha):
+                candidate_center = (x + w / 2, y + h / 2)
+                if not self._collides(mask, x, y, alpha) and self._is_far_enough_from_same_label(
+                    candidate_center,
+                    same_label_centers,
+                    min_distance,
+                ):
                     region = mask[y : y + h, x : x + w]
                     region |= alpha
-                    return PlacedFormula(image=image, x=x, y=y)
+                    return PlacedFormula(image=image, x=x, y=y, center=candidate_center)
                 angle += math.pi / 4
         return None
 
@@ -194,15 +217,18 @@ class FormulaCloudGenerator:
 
         mask = np.zeros((self.height, self.width), dtype=bool)
         canvas = Image.new("RGBA", (self.width, self.height), self.background)
+        centers_by_label: dict[str, list[tuple[float, float]]] = {}
 
         placed = 0
         for item in items_list:
             normalized = (item.weight - min_weight) / weight_span
             target_size = int(min_size + normalized * (max_size - min_size))
             transformed = self._transform_formula(item.image, target_size)
-            position = self._place_one(mask, transformed)
+            same_label_centers = centers_by_label.setdefault(item.label, [])
+            position = self._place_one(mask, transformed, same_label_centers)
             if position:
                 canvas.alpha_composite(position.image, (position.x, position.y))
+                same_label_centers.append(position.center)
                 placed += 1
 
         if placed == 0:

@@ -145,18 +145,8 @@ class FormulaCloudGenerator:
         # accidental over-escaping from JSON strings.
         normalized = re.sub(r"\\{3,}", r"\\\\", normalized)
 
-        env_to_wrappers = {
-            "matrix": ("", ""),
-            # mathtext often fails on \left/\right. Use plain delimiters
-            # around \matrix{...} for better compatibility.
-            "bmatrix": ("[", "]"),
-            "pmatrix": ("(", ")"),
-            "Bmatrix": (r"\{", r"\}"),
-            "vmatrix": ("|", "|"),
-            "Vmatrix": (r"\|", r"\|"),
-            "cases": (r"\{", ""),
-        }
-        for env, (left_wrap, right_wrap) in env_to_wrappers.items():
+        matrix_envs = ("matrix", "bmatrix", "pmatrix", "Bmatrix", "vmatrix", "Vmatrix", "cases")
+        for env in matrix_envs:
             pattern = re.compile(rf"\\begin\{{{env}\}}(.*?)\\end\{{{env}\}}", re.DOTALL)
 
             def _replace_env(match: re.Match[str]) -> str:
@@ -164,14 +154,12 @@ class FormulaCloudGenerator:
                 # Accept a common typo where matrix rows are separated by a
                 # single backslash ("\\ ") instead of canonical "\\\\".
                 body = re.sub(r"(?<!\\)\\(?![A-Za-z\\])", r"\\\\", body)
-                # Matplotlib's mathtext parser does not support amsmath
-                # environments like \begin{matrix}...\end{matrix}. Convert to
-                # TeX primitive \matrix{...} with \cr row separators.
-                body = re.sub(r"\\\\\s*", r"\\cr ", body)
+                # Convert primitive row breaks to canonical matrix row breaks.
+                body = re.sub(r"\\cr\s*", r"\\\\ ", body)
                 body = body.strip()
-                if body.endswith(r"\cr"):
-                    body = body[: -len(r"\cr")].rstrip()
-                return f"{left_wrap}\\matrix{{{body}}}{right_wrap}"
+                if body.endswith(r"\\"):
+                    body = body[: -len(r"\\")].rstrip()
+                return f"\\begin{{{env}}}{body}\\end{{{env}}}"
 
             normalized = pattern.sub(_replace_env, normalized)
 

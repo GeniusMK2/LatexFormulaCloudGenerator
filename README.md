@@ -10,7 +10,8 @@
 - 支持随机旋转角度（横向/纵向/斜向）
 - 支持每个公式重复出现（`repeat`）
 - 公式显示数量与权重成反比（权重越小出现次数越多）
-- 支持云形状约束（`rectangle`/`square`/`circle`/`diamond`）
+- 支持云形状约束（`rectangle`/`square`/`circle`/`diamond`/`heart`）
+- 支持矩阵、行列式、方程组公式（如 `bmatrix`/`vmatrix`/`cases`）
 
 ## 安装依赖
 ```bash
@@ -33,6 +34,8 @@ pip install matplotlib pillow numpy
 > 提示：程序会自动纠正常见的多余转义（例如 `\\int` 会按 `\int` 渲染）。
 
 - `latex`: LaTeX 字符串（不需要手动加 `$...$`，程序会自动去掉首尾 `$`）
+  - 支持矩阵/行列式：`\begin{bmatrix}...\end{bmatrix}`、`\begin{vmatrix}...\end{vmatrix}` 等
+  - 支持方程组：`\begin{cases}...\end{cases}` 或简写 `\system{x+y=1;x-y=2}`
 - `image`: 公式图片路径（建议透明背景）
 - `weight`: 大小权重（浮点或整数）
 - `fontsize`: 仅对 `latex` 生效，可选（为保证可读性，最小会按 32 处理）
@@ -41,7 +44,7 @@ pip install matplotlib pillow numpy
 
 ## 运行
 ```bash
-python formula_cloud.py --input sample_formulas.json --output formula_cloud.png --width 1920 --height 1080 --shape circle --angles 0,45,90,135
+python formula_cloud.py --input sample_formulas.json --output formula_cloud.png --width 1920 --height 1080 --shape heart --angles 0,45,90,135
 ```
 
 ## 输出
@@ -49,5 +52,5 @@ python formula_cloud.py --input sample_formulas.json --output formula_cloud.png 
 
 
 参数补充：
-- `--shape`: 云形状，可选 `rectangle`、`square`、`circle`、`diamond`
+- `--shape`: 云形状，可选 `rectangle`、`square`、`circle`、`diamond`、`heart`
 - `--angles`: 允许的旋转角度（度数，逗号分隔），如 `0,90` 表示仅横竖排

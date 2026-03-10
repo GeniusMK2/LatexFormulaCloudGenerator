@@ -13,10 +13,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
 
-import matplotlib.pyplot as plt
 import numpy as np
 from PIL import Image
-from matplotlib.transforms import Bbox
 
 
 @dataclass
@@ -93,6 +91,9 @@ class FormulaCloudGenerator:
         color: str = "black",
     ) -> Image.Image:
         """Render one LaTeX formula into a cropped RGBA image."""
+        import matplotlib.pyplot as plt
+        from matplotlib.transforms import Bbox
+
         latex = FormulaCloudGenerator.normalize_latex_input(latex)
         fontsize = max(FormulaCloudGenerator.MIN_LATEX_FONT_SIZE, fontsize)
         fig_width = max(2.0, fontsize / 10)
@@ -146,11 +147,14 @@ class FormulaCloudGenerator:
 
         env_to_wrappers = {
             "matrix": ("", ""),
-            "bmatrix": (r"\left[", r"\right]"),
-            "pmatrix": (r"\left(", r"\right)"),
-            "Bmatrix": (r"\left\{", r"\right\}"),
-            "vmatrix": (r"\left|", r"\right|"),
-            "Vmatrix": (r"\left\|", r"\right\|"),
+            # mathtext often fails on \left/\right. Use plain delimiters
+            # around \matrix{...} for better compatibility.
+            "bmatrix": ("[", "]"),
+            "pmatrix": ("(", ")"),
+            "Bmatrix": (r"\{", r"\}"),
+            "vmatrix": ("|", "|"),
+            "Vmatrix": (r"\|", r"\|"),
+            "cases": (r"\{", ""),
         }
         for env, (left_wrap, right_wrap) in env_to_wrappers.items():
             pattern = re.compile(rf"\\begin\{{{env}\}}(.*?)\\end\{{{env}\}}", re.DOTALL)

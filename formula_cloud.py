@@ -145,8 +145,16 @@ class FormulaCloudGenerator:
         # accidental over-escaping from JSON strings.
         normalized = re.sub(r"\\{3,}", r"\\\\", normalized)
 
-        matrix_envs = ("matrix", "bmatrix", "pmatrix", "Bmatrix", "vmatrix", "Vmatrix", "cases")
-        for env in matrix_envs:
+        matrix_wrappers = {
+            "matrix": ("", ""),
+            "bmatrix": (r"\left[", r"\right]"),
+            "pmatrix": (r"\left(", r"\right)"),
+            "Bmatrix": (r"\left\{", r"\right\}"),
+            "vmatrix": (r"\left|", r"\right|"),
+            "Vmatrix": (r"\left\|", r"\right\|"),
+            "cases": (r"\left\{", r"\right."),
+        }
+        for env, (left_wrap, right_wrap) in matrix_wrappers.items():
             pattern = re.compile(rf"\\begin\{{{env}\}}(.*?)\\end\{{{env}\}}", re.DOTALL)
 
             def _replace_env(match: re.Match[str]) -> str:
@@ -159,7 +167,8 @@ class FormulaCloudGenerator:
                 body = body.strip()
                 if body.endswith(r"\\"):
                     body = body[: -len(r"\\")].rstrip()
-                return f"\\begin{{{env}}}{body}\\end{{{env}}}"
+                matrix_core = rf"\matrix{{{body}}}"
+                return f"{left_wrap}{matrix_core}{right_wrap}" if left_wrap or right_wrap else matrix_core
 
             normalized = pattern.sub(_replace_env, normalized)
 
